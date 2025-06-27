@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/colorControlHighlight"> <!-- You can also use a custom color like #33000000 -->
+
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#24000000" /> <!-- Semi-transparent black -->
+            <corners android:radius="12dp" /> <!-- Rounded corners -->
+        </shape>
+    </item>
+</ripple>
