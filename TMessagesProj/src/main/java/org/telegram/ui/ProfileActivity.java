@@ -269,6 +269,7 @@ import org.telegram.ui.Components.UndoView;
 import org.telegram.ui.Components.VectorAvatarThumbDrawable;
 import org.telegram.ui.Components.voip.VoIPHelper;
 import org.telegram.ui.Gifts.GiftSheet;
+import org.telegram.ui.Profile.MetaBallRenderer;
 import org.telegram.ui.Stars.BotStarsActivity;
 import org.telegram.ui.Stars.BotStarsController;
 import org.telegram.ui.Stars.ProfileGiftsView;
@@ -362,7 +363,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private RLottieDrawable cellCameraDrawable;
 
     private HintView fwdRestrictedHint;
-    private FrameLayout avatarContainer;
+    private MorphingAvatarContainer avatarContainer;
     private FrameLayout avatarContainer2;
     private DrawerProfileCell.AnimatedStatusView animatedStatusView;
     private AvatarImageView avatarImage;
@@ -4823,24 +4824,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         animatedStatusView.setPivotX(AndroidUtilities.dp(30));
         animatedStatusView.setPivotY(AndroidUtilities.dp(30));
 
-        avatarContainer = new FrameLayout(context) {
+        avatarContainer = new MorphableAvatarContainer(context) {
             @Override
             protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
                 super.onMeasure(widthMeasureSpec, heightMeasureSpec);
                 setPivotX(getMeasuredWidth() / 2f);
-                Log.d("ProfileActivity", "AvatarContainer.Measured " + getMeasuredWidth() + ":" + getMeasuredHeight());
-            }
-
-            @Override
-            public void setScaleX(float scaleX) {
-                super.setScaleX(scaleX);
-//                Log.d("ProfileActivity", "AvatarContainer.setScaleX(" + scaleX + ")");
-            }
-
-            @Override
-            public void setScaleY(float scaleY) {
-                super.setScaleY(scaleY);
-//                Log.d("ProfileActivity", "AvatarContainer.setScaleY(" + scaleY + ")");
             }
         };
         avatarContainer2 = new FrameLayout(context) {
@@ -5487,6 +5475,101 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     boolean showBoostsAlert;
 
     private final AccelerateDecelerateInterpolator floatingInterpolator = new AccelerateDecelerateInterpolator();
+
+    private static class MorphingAvatarContainer extends FrameLayout {
+        private boolean isMorphed = false;
+        private float morphProgress = 0f;
+
+        private int[] location = new int[2];
+
+        public MorphingAvatarContainer(@NonNull Context context) {
+            super(context);
+            setClipToPadding(false);
+            setWillNotDraw(false);
+        }
+
+        private int dpToPx(float dp) {
+            return Math.round(dp * getResources().getDisplayMetrics().density);
+        }
+
+        void setMorphed(boolean morphed) {
+            if (isMorphed != morphed) {
+                isMorphed = morphed;
+                invalidate();
+            }
+        }
+
+        void setMorphProgress(float progress) {
+            if (morphProgress != progress) {
+                morphProgress = progress;
+                setTranslationY(dpToPx(160) * -progress);
+                float scale = 1f - progress * 0.5f;
+                setScaleX(scale);
+                setScaleY(scale);
+                invalidate();
+            }
+        }
+
+        @Override
+        protected void onDraw(@NonNull Canvas canvas) {
+            super.onDraw(canvas);
+        }
+
+        private Drawable getAvatarDrawable() {
+            ImageView avatarImage = (ImageView) getChildAt(0);
+            return avatarImage.getDrawable();
+        }
+
+        @Override
+        protected void dispatchDraw(@NonNull Canvas canvas) {
+            if (isMorphed) {
+                drawMorphed(canvas, getAvatarDrawable());
+            } else {
+                super.dispatchDraw(canvas);
+            }
+        }
+
+        @Override
+        protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+            super.onLayout(changed, left, top, right, bottom);
+            getLocationOnScreen(location);
+        }
+
+        @Override
+        public void setTranslationX(float translationX) {
+            super.setTranslationX(translationX);
+            getLocationOnScreen(location);
+        }
+
+        @Override
+        public void setTranslationY(float translationY) {
+            super.setTranslationY(translationY);
+            getLocationOnScreen(location);
+        }
+
+        private void drawMorphed(Canvas canvas, Drawable avatar) {
+            float progress = morphProgress;
+
+            // This circle properties
+            float width = getMeasuredWidth();
+            float height = getMeasuredHeight();
+            float r1 = Math.min(width, height) / 2f;
+            float cx1 = width / 2f;
+            float cy1 = height / 2;
+
+            // The other circle properties
+            float r2 = r1 * 2f;
+            float cx2 = cx1 - getTranslationX();
+            float cy2 = -r2 + progress * dpToPx(40) - location[1];
+
+            MetaBallRenderer.drawMorph(canvas, cx1, cy1, r1, cx2, cy2, r2, Color.BLACK);
+
+            avatar.draw(canvas);
+
+            int dimColor = ColorUtils.setAlphaComponent(Color.BLACK, (int) (progress * 255));
+            MetaBallRenderer.drawMorph(canvas, cx1, cy1, r1, cx2, cy2, r2, dimColor);
+        }
+    }
 
     private void checkCanSendStoryForPosting() {
         TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(chatId);
@@ -7676,6 +7759,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 @Override
                 public void onAnimationStart(@NonNull Animator animation) {
                     avatarContainer.setVisibility(View.VISIBLE);
+                    avatarContainer.setMorphed(true);
 //                    avatarContainer.setPivotX(avatarContainer.getMeasuredWidth() / 2f);
 //                    avatarContainer.setPivotY(avatarContainer.getMeasuredHeight() / 2f);
                 }
@@ -7683,6 +7767,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 @Override
                 public void onAnimationEnd(@NonNull Animator animation) {
                     avatarContainer.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+                    avatarContainer.setMorphed(false);
                     resetPivot();
                 }
 
@@ -7702,16 +7787,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             morphAvatarAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                 @Override
                 public void onAnimationUpdate(@NonNull ValueAnimator animation) {
-                    setAvatarMorphProgress((float) animation.getAnimatedValue());
+                    avatarContainer.setMorphProgress((float) animation.getAnimatedValue());
                 }
             });
             morphAvatarAnimator.start();
         }
-    }
-
-    private void setAvatarMorphProgress(float progress) {
-        avatarContainer.setScaleX(progress);
-        avatarContainer.setScaleY(progress);
     }
 
     private void finishAvatarMorphAnimation() {
