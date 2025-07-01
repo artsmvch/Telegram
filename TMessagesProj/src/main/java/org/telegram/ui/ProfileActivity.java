@@ -4824,7 +4824,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         animatedStatusView.setPivotX(AndroidUtilities.dp(30));
         animatedStatusView.setPivotY(AndroidUtilities.dp(30));
 
-        avatarContainer = new MorphableAvatarContainer(context) {
+        avatarContainer = new MorphingAvatarContainer(context) {
             @Override
             protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
                 super.onMeasure(widthMeasureSpec, heightMeasureSpec);
@@ -5482,6 +5482,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
         private int[] location = new int[2];
 
+        private AvatarImageView avatarImage = null;
+
         public MorphingAvatarContainer(@NonNull Context context) {
             super(context);
             setClipToPadding(false);
@@ -5490,6 +5492,14 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
         private int dpToPx(float dp) {
             return Math.round(dp * getResources().getDisplayMetrics().density);
+        }
+
+        @Override
+        public void onViewAdded(View child) {
+            super.onViewAdded(child);
+            if (child instanceof AvatarImageView) {
+                avatarImage = (AvatarImageView) child;
+            }
         }
 
         void setMorphed(boolean morphed) {
@@ -5516,8 +5526,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         }
 
         private Drawable getAvatarDrawable() {
-            ImageView avatarImage = (ImageView) getChildAt(0);
-            return avatarImage.getDrawable();
+            return avatarImage.getAvatarDrawable();
         }
 
         @Override
@@ -5566,7 +5575,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
             avatar.draw(canvas);
 
-            int dimColor = ColorUtils.setAlphaComponent(Color.BLACK, (int) (progress * 255));
+            int alpha = Math.max(255, Math.min(0, (int) (progress * 255)));
+            int dimColor = ColorUtils.setAlphaComponent(Color.BLACK, alpha);
             MetaBallRenderer.drawMorph(canvas, cx1, cy1, r1, cx2, cy2, r2, dimColor);
         }
     }
